@@ -1,4 +1,5 @@
 /* USER CODE BEGIN Header */
+
 /**
   ******************************************************************************
   * @file           : main.c
@@ -41,9 +42,10 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-SPI_HandleTypeDef hspi1;
-
+UART_HandleTypeDef hlpuart1;
 UART_HandleTypeDef huart2;
+
+SPI_HandleTypeDef hspi1;
 
 /* USER CODE BEGIN PV */
 
@@ -51,16 +53,16 @@ unsigned long numTestsMRAM0 = 0;
 unsigned long  numTestsMRAM1 = 0;
 unsigned long  numTestsMRAM2 = 0;
 unsigned long  numTestsMRAM3 = 0;
-uint16_t numFailsMRAM0 = 0;
-uint16_t numFailsMRAM1 = 0;
-uint16_t numFailsMRAM2 = 0;
-uint16_t numFailsMRAM3 = 0;
+uint32_t numFailsMRAM0 = 0;
+uint32_t numFailsMRAM1 = 0;
+uint32_t numFailsMRAM2 = 0;
+uint32_t numFailsMRAM3 = 0;
 uint8_t currChip = 0;
 uint8_t currState = 0;
-uint8_t consoleMode = 0;
+uint8_t consoleMode = 1;
 
 uint8_t wren = 0x06;
-uint8_t configure_code_1[] = {0x71,0x00,0x00,0x05,0x0C}; // code for configuring avalanche AS1016A04
+uint8_t configure_code_1[] = {0x71,0x00,0x00,0x05,0x05}; // code for configuring avalanche AS1016A04
 uint8_t configure_code_2[] = {0x71,0x00,0x00,0x05,0x02}; // code for configuring NETSOL S3A1604V0M
 uint8_t Rx[1] = {'\0'};
 uint8_t read = 0;
@@ -72,6 +74,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_LPUART1_UART_Init(void);
 void MX_USB_HOST_Process(void);
 
 /* USER CODE BEGIN PFP */
@@ -84,9 +87,30 @@ void ReadMem(uint8_t chip, uint32_t addr, uint16_t length, uint8_t* buffer);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+
+void clrstr(uint8_t* str, int len){
+	for(int i=0; i<len; i++){
+		*(str+i)='\0';
+	}
+}
+
+// wait in nanoseconds
+void delay_ns(uint32_t ns){
+	//get system clock frequency
+	uint32_t system_clock_hz = SystemCoreClock;
+	//calculate the number of cycles required for this delay
+	uint64_t cycles_needed_64 = (uint64_t)system_clock_hz * ns;
+
+	//Now divide by the number of nanoseconds in a second
+	uint32_t cycles_needed = cycles_needed_64/1000000000;
+
+	uint32_t start_cycle = DWT->CYCCNT;
+	while((DWT->CYCCNT-start_cycle)<cycles_needed);
+}
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){                                       // Weakly defined function, used for callback in the ISR in this case
-                                                                                               // Better practice to have it in a separate file
-	HAL_UART_Receive_IT(&huart2, Rx, 1); //It will then self-sustain
+	                                                                                          // Better practice to have it in a separate file
+	HAL_UART_Receive_IT(&hlpuart1, Rx, 1); //It will then self-sustain
 
     if(Rx[0]==testDetailCmd[read])                                                    //strcmp may be wrongly used here
       {
@@ -101,61 +125,61 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){                        
     	      	read=0;
     	  }
       }
-      if(read>=3)
+      if(read>=2)
       {
       	read=0;
       	if(consoleMode){
-      		uint8_t data[50];
-      		clrstr(data, 50);
-      		HAL_UART_Transmit(&huart2,"Memory Test Latest Results: \r\n\n" ,31,40); //SET TO /0 SO AS TO REMOVE EXTRANEOUS STUFF
-      		clrstr(data, 50);
+      		uint8_t data[76];
+      		clrstr(data, 76);
+      		HAL_UART_Transmit(&hlpuart1,"Memory Test Latest Results: \r\n\n" ,31,40); //SET TO /0 SO AS TO REMOVE EXTRANEOUS STUFF
+      		clrstr(data, 76);
       		sprintf(data, "MRAM0 tests completed:\t%lu\r\nMRAM0 failures:\t\t%u\r\n", numTestsMRAM0, numFailsMRAM0);
-      		HAL_UART_Transmit(&huart2,data,sizeof(data),40);
-      		clrstr(data, 50);
+      		HAL_UART_Transmit(&hlpuart1,data,strlen(data),40);
+      		clrstr(data, 76);
       		sprintf(data, "MRAM1 tests completed:\t%lu\r\nMRAM1 failures:\t\t%u\r\n", numTestsMRAM1, numFailsMRAM1);
-      		HAL_UART_Transmit(&huart2,data,sizeof(data),40);
-      		clrstr(data, 50);
+      		HAL_UART_Transmit(&hlpuart1,data,strlen(data),40);
+      		clrstr(data, 76);
       		sprintf(data, "MRAM2 tests completed:\t%lu\r\nMRAM2 failures:\t\t%u\r\n", numTestsMRAM2, numFailsMRAM2);
-      		HAL_UART_Transmit(&huart2,data,sizeof(data),40);
-      		clrstr(data, 50);
+      		HAL_UART_Transmit(&hlpuart1,data,strlen(data),40);
+      		clrstr(data, 76);
       		sprintf(data, "MRAM3 tests completed:\t%lu\r\nMRAM3 failures:\t\t%u\r\n", numTestsMRAM3, numFailsMRAM3);
-      		HAL_UART_Transmit(&huart2,data,sizeof(data),40);
+      		HAL_UART_Transmit(&hlpuart1,data,strlen(data),40);
 
-      		HAL_UART_Transmit(&huart2,"\nCurrently testing chip ",24,40);
+      		HAL_UART_Transmit(&hlpuart1,"\nCurrently testing chip ",24,40);
       		switch(currChip){
       		case 0:
-      			HAL_UART_Transmit(&huart2,"MRAM0\r\n",7,40);
+      			HAL_UART_Transmit(&hlpuart1,"MRAM0\r\n",7,40);
       			break;
       		case 1:
-      			HAL_UART_Transmit(&huart2,"MRAM1\r\n",7,40);
+      			HAL_UART_Transmit(&hlpuart1,"MRAM1\r\n",7,40);
       			break;
       		case 2:
-      			HAL_UART_Transmit(&huart2,"MRAM2\r\n",7,40);
+      			HAL_UART_Transmit(&hlpuart1,"MRAM2\r\n",7,40);
       			break;
       		case 3:
-      			HAL_UART_Transmit(&huart2,"MRAM3\r\n",7,40);
+      			HAL_UART_Transmit(&hlpuart1,"MRAM3\r\n",7,40);
       			break;
       		}
 
-      		HAL_UART_Transmit(&huart2,"Current state: ",15,40);
+      		HAL_UART_Transmit(&hlpuart1,"Current state: ",15,40);
       		switch(currState){
       		case 0:
-      			HAL_UART_Transmit(&huart2,"UP:w0\r\n",7,40);
+      			HAL_UART_Transmit(&hlpuart1,"UP:w0\r\n\r\n",9,40);
       			break;
       		case 1:
-      			HAL_UART_Transmit(&huart2,"UP:r0 w1\r\n",10,40);
+      			HAL_UART_Transmit(&hlpuart1,"UP:r0 w1\r\n\r\n",12,40);
       			break;
       		case 2:
-      			HAL_UART_Transmit(&huart2,"UP:r1 w0\r\n",10,40);
+      			HAL_UART_Transmit(&hlpuart1,"UP:r1 w0\r\n\r\n",12,40);
       			break;
       		case 3:
-      			HAL_UART_Transmit(&huart2,"DOWN:r0 w1\r\n",12,40);
+      			HAL_UART_Transmit(&hlpuart1,"DOWN:r0 w1\r\n\r\n",14,40);
       			break;
       		case 4:
-      			HAL_UART_Transmit(&huart2,"DOWN:r1 w0\r\n",12,40);
+      			HAL_UART_Transmit(&hlpuart1,"DOWN:r1 w0\r\n\r\n",14,40);
       			break;
       		case 5:
-      			HAL_UART_Transmit(&huart2,"DOWN:r0\r\n",9,40);
+      			HAL_UART_Transmit(&hlpuart1,"DOWN:r0\r\n\r\n",11,40);
       			break;
       		}
       	}
@@ -197,7 +221,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){                        
       		data[26] = '\r';
       		data[27] = '\n';
 
-      		HAL_UART_Transmit(&huart2,data,28,30);
+      		HAL_UART_Transmit(&hlpuart1,data,28,30);
 
       	}
       }
@@ -240,7 +264,7 @@ void WriteMem(uint8_t chip, uint32_t addr, uint16_t length, uint8_t* data){
 	}
 
 	HAL_GPIO_WritePin(GPIOE, selectedPin, GPIO_PIN_RESET);
-	HAL_SPI_Transmit(&hspi1, (uint8_t *)TxBuff, length, length);
+	HAL_SPI_Transmit(&hspi1, (uint8_t *)TxBuff, length, 100);
 	HAL_GPIO_WritePin(GPIOE, selectedPin, GPIO_PIN_SET);
 }
 
@@ -286,46 +310,56 @@ void ReadMem(uint8_t chip, uint32_t addr, uint16_t length, uint8_t* buffer){
 
 
 // this is the Memory test for 4Mb MR25H40MDF
-void MemTest(int chip, uint16_t* fails){
+void MemTest(int chip, uint32_t* fails, unsigned long* num_reads){
 
     uint8_t zero = 0;                 //Maybe make a 6-deep array of ints to track the failures in each march element?   //failure is redundant
+    uint8_t one = 255;
     uint8_t readByte = 0;
     uint8_t writeByte = 0;
 
     currState = 0;
-
+    HAL_UART_Transmit(&hlpuart1,(uint8_t*)"currState 0\r\n",13,50);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
     //UP(w0);
     for(int x=0; x<524288; x++){ //Loop through each memory location
     	WriteMem(chip, x, 1, &zero); //Write a 0 at each address                                     // the final 0 is suspicious, it may cause error bc it should be a pointer
     }
 
-
     currState = 1;
+    HAL_UART_Transmit(&hlpuart1,(uint8_t*)"currState 1\r\n",13,50);
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
     //UP(r0, w1);
     for(int y=0; y<524288; y++){ 		//Loop through each memory location
     	for(int z=0; z<8; z++){ 		//Read 0, write 1 at each bit
     		ReadMem(chip, y, 1, &readByte);
+
+    		(*num_reads) ++;
     		writeByte = readByte;
     		writeByte |= (0x01<<(7-z)); //Copy the byte, except we set the MSb to 1
     		*fails += (readByte>>(7-z))&0x01; //Read the MSb and if it's not 0, increment failures
+
         	WriteMem(chip, y, 1, &writeByte); //Read 0, write 1 at each bit
     	}
     }
+
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
 
 
     currState = 2;
+    HAL_UART_Transmit(&hlpuart1,(uint8_t*)"currState 2\r\n",13,50);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
     //UP(r1, w0);
     for(int y=0; y<524288; y++){ 		//Loop through each memory location
     	for(int z=0; z<8; z++){ 		//Read 1, write 0 at each bit
     		ReadMem(chip, y, 1, &readByte);
+
+    		(*num_reads) ++;
+
     		writeByte = readByte;
     		writeByte &= ~(0x01<<(7-z)); //Copy the byte, except we set the MSb to 0
     		*fails += ((~readByte)>>(7-z))&0x01; //Read the MSb and if it's not 1, increment failures
         	WriteMem(chip, y, 1, &writeByte);
+
     	}
     }
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_RESET);
@@ -338,6 +372,9 @@ void MemTest(int chip, uint16_t* fails){
     for(int y=524287; y>=0; y--){ 		//Loop through each memory location
     	for(int z=0; z<8; z++){ 		//Read 0, write 1 at each bit
     		ReadMem(chip, y, 1, &readByte);
+
+    		(*num_reads) ++;
+
     		writeByte = readByte;
     		writeByte |= (0x01<<z); //Copy the byte, except we set the LSb to 1
     		*fails += (readByte>>z)&0x01; //Read the LSb and if it's not 0, increment failures
@@ -352,6 +389,9 @@ void MemTest(int chip, uint16_t* fails){
     for(int y=524287; y>=0; y--){ 		//Loop through each memory location
     	for(int z=0; z<8; z++){			//Read 1, write 0 at each bit
     		ReadMem(chip, y, 1, &readByte);
+
+    		(*num_reads) ++;
+
     		writeByte = readByte;
     		writeByte &= ~(0x01<<z); //Copy the byte, except we set the LSb to 0
     		*fails += ((~readByte)>>z)&0x01; //Read the LSb and if it's not 1, increment failures
@@ -364,6 +404,9 @@ void MemTest(int chip, uint16_t* fails){
     //DOWN(r0);
     for(int y=524287; y>=0; y--){ 		//Loop through each memory location
     	ReadMem(chip, y, 1, &readByte);
+
+    	(*num_reads)++;
+
     	if(readByte>0){
     		(*fails)++;					//If any bytes are non-zero, increment failures
     	}
@@ -374,7 +417,7 @@ void MemTest(int chip, uint16_t* fails){
 
 
 // Memory test for memory with 16M memory (The remaining three MRAMs)
-void MemTest_16(int chip, uint16_t* fails){
+void MemTest_16(int chip, uint32_t* fails, unsigned long* num_reads){
 
     uint8_t zero = 0;                 //Maybe make a 6-deep array of ints to track the failures in each march element?   //failure is redundant
     uint8_t readByte = 0;
@@ -388,6 +431,12 @@ void MemTest_16(int chip, uint16_t* fails){
     	WriteMem(chip, x, 1, &zero); //Write a 0 at each address                                     // the final 0 is suspicious, it may cause error bc it should be a pointer
     }
 
+    /*uint8_t data[16];
+    ReadMem(1, 100, 1, &readByte);
+    sprintf(data, "read value:\t\t%u\r\n", readByte);
+    HAL_UART_Transmit(&hlpuart1,data,sizeof(data),100);*/
+
+
 
     currState = 1;
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
@@ -395,6 +444,7 @@ void MemTest_16(int chip, uint16_t* fails){
     for(int y=0; y<2097152; y++){ 		//Loop through each memory location
     	for(int z=0; z<8; z++){ 		//Read 0, write 1 at each bit
     		ReadMem(chip, y, 1, &readByte);
+    		(*num_reads)++;
     		writeByte = readByte;
     		writeByte |= (0x01<<(7-z)); //Copy the byte, except we set the MSb to 1
     		*fails += (readByte>>(7-z))&0x01; //Read the MSb and if it's not 0, increment failures
@@ -410,6 +460,7 @@ void MemTest_16(int chip, uint16_t* fails){
     for(int y=0; y<2097152; y++){ 		//Loop through each memory location
     	for(int z=0; z<8; z++){ 		//Read 1, write 0 at each bit
     		ReadMem(chip, y, 1, &readByte);
+    		(*num_reads)++;
     		writeByte = readByte;
     		writeByte &= ~(0x01<<(7-z)); //Copy the byte, except we set the MSb to 0
     		*fails += ((~readByte)>>(7-z))&0x01; //Read the MSb and if it's not 1, increment failures
@@ -426,10 +477,12 @@ void MemTest_16(int chip, uint16_t* fails){
     for(int y=2097151; y>=0; y--){ 		//Loop through each memory location
     	for(int z=0; z<8; z++){ 		//Read 0, write 1 at each bit
     		ReadMem(chip, y, 1, &readByte);
+    		(*num_reads)++;
     		writeByte = readByte;
     		writeByte |= (0x01<<z); //Copy the byte, except we set the LSb to 1
     		*fails += (readByte>>z)&0x01; //Read the LSb and if it's not 0, increment failures
         	WriteMem(chip, y, 1, &writeByte);
+
     	}
     }
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
@@ -440,6 +493,7 @@ void MemTest_16(int chip, uint16_t* fails){
     for(int y=2097151; y>=0; y--){ 		//Loop through each memory location
     	for(int z=0; z<8; z++){			//Read 1, write 0 at each bit
     		ReadMem(chip, y, 1, &readByte);
+    		(*num_reads)++;
     		writeByte = readByte;
     		writeByte &= ~(0x01<<z); //Copy the byte, except we set the LSb to 0
     		*fails += ((~readByte)>>z)&0x01; //Read the LSb and if it's not 1, increment failures
@@ -452,6 +506,7 @@ void MemTest_16(int chip, uint16_t* fails){
     //DOWN(r0);
     for(int y=2097151; y>=0; y--){ 		//Loop through each memory location
     	ReadMem(chip, y, 1, &readByte);
+    	(*num_reads)++;
     	if(readByte>0){
     		(*fails)++;					//If any bytes are non-zero, increment failures
     	}
@@ -464,13 +519,6 @@ void MemTest_16(int chip, uint16_t* fails){
 
 
 
-
-
-void clrstr(uint8_t* str, int len){
-	for(int i=0; i<len; i++){
-		*(str+i)='\0';
-	}
-}
 
 /* USER CODE END 0 */
 
@@ -502,19 +550,27 @@ int main(void)
   MX_USB_HOST_Init();
   MX_USART2_UART_Init();
   MX_SPI1_Init();
+  MX_LPUART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+  DWT->CYCCNT =0;
+
+
 
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10|GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_RESET); //Set WRite ENable
   HAL_SPI_Transmit(&hspi1, &wren, 1, 10); // to enable write on the MRAM chip
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10|GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_SET);
 
+  HAL_UART_Receive_IT(&hlpuart1, Rx, 1);
+
   HAL_Delay(1); //short delay between transactions
 
-  //We have to configure the mode of "Avalanche AS1016A04" such that we get the back-to-back mode
+  //We have to configure the mode of "Avalanche AS1016A04/Avalanche AS1004A04" such that we get the back-to-back mode
   //Then we don't need wren every time we want to write
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_14, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_12|GPIO_PIN_14, GPIO_PIN_RESET);
   HAL_SPI_Transmit(&hspi1, configure_code_1, 5, 20);
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_14, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_12|GPIO_PIN_14, GPIO_PIN_SET);
 
   //we have to configure the mode of "NETSOL S3A1606VOM" such that we get the back-to-back mode
   //Then we don't need wren every time we want to write
@@ -522,11 +578,35 @@ int main(void)
   HAL_SPI_Transmit(&hspi1, configure_code_2, 5, 20);
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_SET);
 
-  HAL_UART_Receive_IT(&huart2, Rx, 1); //Get the interrupt running
+
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_RESET); //Set WRite ENable
+  HAL_SPI_Transmit(&hspi1, &wren, 1, 10); // to enable write on the MRAM chip
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_SET);
+
+
+  HAL_UART_Transmit(&hlpuart1, (uint8_t*)"\r\n", 2, 1000);//Get the interrupt running
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+
+  // check if the code is actually running
+
+  currChip = 0;
+  uint8_t writeByte = 211;
+  uint8_t readByte;
+  uint8_t data[16];
+  uint8_t fails=0;
+
+  WriteMem(0, 20001, 1, &writeByte); //Read 0, write 1 at each bit
+  ReadMem(0, 20001, 1, &readByte);
+
+  sprintf(data, "read value:\t\t%u\r\n", readByte);
+  HAL_UART_Transmit(&hlpuart1,data,sizeof(data),20);
+
+
+
   while (1)
   {
     /* USER CODE END WHILE */
@@ -535,20 +615,17 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
     currChip = 0;
-    MemTest(0, &numFailsMRAM0);
-    numTestsMRAM0++;
+    MemTest(0, &numFailsMRAM0,&numTestsMRAM0);
 
     currChip = 1;
-    MemTest_16(1, &numFailsMRAM1);
-    numTestsMRAM1++;
+    MemTest_16(1, &numFailsMRAM1, &numTestsMRAM1);
 
     currChip = 2;
-    MemTest_16(2, &numFailsMRAM2);
-    numTestsMRAM2++;
+    MemTest(2, &numFailsMRAM2, &numTestsMRAM2);
 
     currChip = 3;
-    MemTest_16(3, &numFailsMRAM3);
-    numTestsMRAM3++;
+    MemTest_16(3, &numFailsMRAM3, &numTestsMRAM3);
+
 
   }
 
@@ -616,6 +693,75 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief LPUART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_LPUART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN LPUART1_Init 0 */
+
+  /* USER CODE END LPUART1_Init 0 */
+
+  /* USER CODE BEGIN LPUART1_Init 1 */
+
+  /* USER CODE END LPUART1_Init 1 */
+  hlpuart1.Instance = LPUART1;
+  hlpuart1.Init.BaudRate = 115200;
+  hlpuart1.Init.WordLength = UART_WORDLENGTH_8B;
+  hlpuart1.Init.StopBits = UART_STOPBITS_1;
+  hlpuart1.Init.Parity = UART_PARITY_NONE;
+  hlpuart1.Init.Mode = UART_MODE_TX_RX;
+  hlpuart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  hlpuart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  hlpuart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&hlpuart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN LPUART1_Init 2 */
+
+  /* USER CODE END LPUART1_Init 2 */
+
+}
+
+/**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 9600;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
   * @brief SPI1 Initialization Function
   * @param None
   * @retval None
@@ -652,41 +798,6 @@ static void MX_SPI1_Init(void)
   /* USER CODE BEGIN SPI1_Init 2 */
 
   /* USER CODE END SPI1_Init 2 */
-
-}
-
-/**
-  * @brief USART2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART2_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART2_Init 0 */
-
-  /* USER CODE END USART2_Init 0 */
-
-  /* USER CODE BEGIN USART2_Init 1 */
-
-  /* USER CODE END USART2_Init 1 */
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 9600;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART2_Init 2 */
-
-  /* USER CODE END USART2_Init 2 */
 
 }
 
@@ -757,14 +868,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : STLK_RX_Pin STLK_TX_Pin */
-  GPIO_InitStruct.Pin = STLK_RX_Pin|STLK_TX_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF8_LPUART1;
   HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LD1_Pin */

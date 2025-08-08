@@ -58,6 +58,7 @@ void SysTick_Handler(void);
 void USART2_IRQHandler(void);
 void EXTI15_10_IRQHandler(void);
 void OTG_FS_IRQHandler(void);
+void LPUART1_IRQHandler(void);
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */

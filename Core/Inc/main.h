@@ -70,8 +70,6 @@ void Error_Handler(void);
 #define USB_PowerSwitchOn_GPIO_Port GPIOG
 #define STLK_RX_Pin GPIO_PIN_7
 #define STLK_RX_GPIO_Port GPIOG
-#define STLK_TX_Pin GPIO_PIN_8
-#define STLK_TX_GPIO_Port GPIOG
 #define LD1_Pin GPIO_PIN_7
 #define LD1_GPIO_Port GPIOC
 #define USB_SOF_Pin GPIO_PIN_8
