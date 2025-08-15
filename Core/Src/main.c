@@ -53,10 +53,16 @@ unsigned long numTestsMRAM0 = 0;
 unsigned long  numTestsMRAM1 = 0;
 unsigned long  numTestsMRAM2 = 0;
 unsigned long  numTestsMRAM3 = 0;
+unsigned long  numTestsMRAM4 = 0;
+unsigned long  numTestsMRAM5 = 0;
+
 uint32_t numFailsMRAM0 = 0;
 uint32_t numFailsMRAM1 = 0;
 uint32_t numFailsMRAM2 = 0;
 uint32_t numFailsMRAM3 = 0;
+uint32_t numFailsMRAM4 = 0;
+uint32_t numFailsMRAM5 = 0;
+
 uint8_t currChip = 0;
 uint8_t currState = 0;
 uint8_t consoleMode = 1;
@@ -144,6 +150,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){                        
       		clrstr(data, 76);
       		sprintf(data, "MRAM3 tests completed:\t%lu\r\nMRAM3 failures:\t\t%u\r\n", numTestsMRAM3, numFailsMRAM3);
       		HAL_UART_Transmit(&hlpuart1,data,strlen(data),40);
+      		clrstr(data, 76);
+      		sprintf(data, "MRAM4 tests completed:\t%lu\r\nMRAM4 failures:\t\t%u\r\n", numTestsMRAM4, numFailsMRAM4);
+      		HAL_UART_Transmit(&hlpuart1,data,strlen(data),40);
+      		clrstr(data, 76);
+      		sprintf(data, "MRAM5 tests completed:\t%lu\r\nMRAM5 failures:\t\t%u\r\n", numTestsMRAM5, numFailsMRAM5);
+      		HAL_UART_Transmit(&hlpuart1,data,strlen(data),40);
+      		clrstr(data, 76);
 
       		HAL_UART_Transmit(&hlpuart1,"\nCurrently testing chip ",24,40);
       		switch(currChip){
@@ -159,8 +172,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){                        
       		case 3:
       			HAL_UART_Transmit(&hlpuart1,"MRAM3\r\n",7,40);
       			break;
+      		case 4:
+      			HAL_UART_Transmit(&hlpuart1,"MRAM4\r\n",7,40);
+      			break;
+      		case 5:
+      			HAL_UART_Transmit(&hlpuart1,"MRAM5\r\n",7,40);
+      			break;
       		}
-
       		HAL_UART_Transmit(&hlpuart1,"Current state: ",15,40);
       		switch(currState){
       		case 0:
@@ -183,7 +201,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){                        
       			break;
       		}
       	}
-      	else{
+      	else{                       // The rest of the function won't be used
       		uint8_t data[28];
 
       		data[0] = (numTestsMRAM0>>24)&0x000000FF;
@@ -245,6 +263,12 @@ void WriteMem(uint8_t chip, uint32_t addr, uint16_t length, uint8_t* data){
 	case 3:
 		selectedPin = 32768;
 		break;
+	case 4:
+		selectedPin = 512;
+		break;
+	case 5:
+		selectedPin = 2048;
+		break;
 	}
 
 	/*if(chip>1){ //If it's FRAM we need to re-enable writes after every write
@@ -284,6 +308,12 @@ void ReadMem(uint8_t chip, uint32_t addr, uint16_t length, uint8_t* buffer){
 		break;
 	case 3:
 		selectedPin = 32768;
+		break;
+	case 4:
+		selectedPin = 512;
+		break;
+	case 5:
+		selectedPin = 2048;
 		break;
 	}
 
@@ -558,9 +588,9 @@ int main(void)
 
 
 
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10|GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_RESET); //Set WRite ENable
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_RESET); //Set WRite ENable
   HAL_SPI_Transmit(&hspi1, &wren, 1, 10); // to enable write on the MRAM chip
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10|GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_SET);
 
   HAL_UART_Receive_IT(&hlpuart1, Rx, 1);
 
@@ -568,20 +598,20 @@ int main(void)
 
   //We have to configure the mode of "Avalanche AS1016A04/Avalanche AS1004A04" such that we get the back-to-back mode
   //Then we don't need wren every time we want to write
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_12|GPIO_PIN_14, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE,  GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_RESET);
   HAL_SPI_Transmit(&hspi1, configure_code_1, 5, 20);
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_12|GPIO_PIN_14, GPIO_PIN_SET);
-
+  HAL_GPIO_WritePin(GPIOE,  GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_SET);
+/*
   //we have to configure the mode of "NETSOL S3A1606VOM" such that we get the back-to-back mode
   //Then we don't need wren every time we want to write
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_RESET);
   HAL_SPI_Transmit(&hspi1, configure_code_2, 5, 20);
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_SET);
+*/
 
-
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_RESET); //Set WRite ENable
+  HAL_GPIO_WritePin(GPIOE,  GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_RESET); //Set WRite ENable
   HAL_SPI_Transmit(&hspi1, &wren, 1, 10); // to enable write on the MRAM chip
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOE,  GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_SET);
 
 
   HAL_UART_Transmit(&hlpuart1, (uint8_t*)"\r\n", 2, 1000);//Get the interrupt running
@@ -593,17 +623,13 @@ int main(void)
 
   // check if the code is actually running
 
-  currChip = 0;
-  uint8_t writeByte = 211;
-  uint8_t readByte;
-  uint8_t data[16];
-  uint8_t fails=0;
+  int pos = 0;
+  uint8_t writeByte = 0;
+  uint8_t readByte = 0;
+  int chip = 0;
+  uint8_t data[37];
 
-  WriteMem(0, 20001, 1, &writeByte); //Read 0, write 1 at each bit
-  ReadMem(0, 20001, 1, &readByte);
 
-  sprintf(data, "read value:\t\t%u\r\n", readByte);
-  HAL_UART_Transmit(&hlpuart1,data,sizeof(data),20);
 
 
 
@@ -614,18 +640,47 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-    currChip = 0;
+    /*currChip = 0;
     MemTest(0, &numFailsMRAM0,&numTestsMRAM0);
 
     currChip = 1;
-    MemTest_16(1, &numFailsMRAM1, &numTestsMRAM1);
+    MemTest(1, &numFailsMRAM1, &numTestsMRAM1);
 
     currChip = 2;
     MemTest(2, &numFailsMRAM2, &numTestsMRAM2);
 
     currChip = 3;
-    MemTest_16(3, &numFailsMRAM3, &numTestsMRAM3);
+    MemTest(3, &numFailsMRAM3, &numTestsMRAM3);
 
+    currChip = 4;
+    MemTest(4, &numFailsMRAM4, &numTestsMRAM4);
+
+    currChip = 5;
+    MemTest(5, &numFailsMRAM5, &numTestsMRAM5);*/
+
+
+
+
+    WriteMem(chip, pos, 1, &writeByte); //Read 0, write 1 at each bit
+    ReadMem(chip, pos, 1, &readByte);
+
+    sprintf(data, "chip number: %u  read value:\t\t%u\r\n",chip,readByte);
+    HAL_UART_Transmit(&hlpuart1,data,sizeof(data),20);
+    clrstr(data,37);
+
+    chip++;
+    pos++;
+    if (chip==6){
+    	chip=0;
+    	writeByte++;
+    }
+    if (writeByte==256){
+    	writeByte=0;
+    }
+    HAL_Delay(1000);
+    if (writeByte!=readByte){
+    	numFailsMRAM0++;
+    }
 
   }
 
@@ -826,7 +881,8 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10|GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12
+                          |GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, LD3_Pin|LD2_Pin, GPIO_PIN_RESET);
@@ -843,8 +899,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PE10 PE12 PE14 PE15 */
-  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15;
+  /*Configure GPIO pins : PE9 PE10 PE11 PE12
+                           PE14 PE15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12
+                          |GPIO_PIN_14|GPIO_PIN_15;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
